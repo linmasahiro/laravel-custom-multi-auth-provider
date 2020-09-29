@@ -4,6 +4,8 @@ namespace App\Providers;
 
 use App\Models\UsersModel;
 use Illuminate\Auth\EloquentUserProvider;
+use Illuminate\Support\Str;
+use Illuminate\Contracts\Support\Arrayable;
 
 /**
  * 自定義登入時驗證項目
@@ -21,11 +23,33 @@ class CustomUserProvider extends EloquentUserProvider
      */
     public function retrieveByCredentials(array $credentials)
     {
-        $user = UsersModel::whereHas('roles', function ($query) {
-            $role = 1; // 這是你的role的代號
-            $query->whereRole($role);
-        })->where('email', '=', $credentials['email'])->first();
+        if (
+            empty($credentials) ||
+            (count($credentials) === 1 &&
+            Str::contains($this->firstCredentialKey($credentials), 'password'))
+        ) {
+            return;
+        }
 
-        return $user;
+        $query = $this->newModelQuery();
+
+        // 追加條件
+        $query = $query->whereHas('roles', function ($query) {
+                 $query->whereRole(config('const.ROLE')['ADMIN']);
+        });
+
+        foreach ($credentials as $key => $value) {
+            if (Str::contains($key, 'password')) {
+                continue;
+            }
+
+            if (is_array($value) || $value instanceof Arrayable) {
+                $query->whereIn($key, $value);
+            } else {
+                $query->where($key, $value);
+            }
+        }
+
+        return $query->first();
     }
 }
